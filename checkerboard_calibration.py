@@ -2,147 +2,77 @@ import numpy as np
 import cv2
 import glob
 import logging
-from scipy import linalg
+from scipy.optimize import curve_fit
+import util
+import matplotlib.pyplot as plt
 
 
-def find_corners():
-    logging.info('find_corners function has started...')
-    termination_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    checkerboard = (6, 9)
-    # Prepare coordinates
-    object_points = np.zeros((1, checkerboard[0] * checkerboard[1], 3), np.float32)
-    object_points[0, :, :2] = np.mgrid[0:checkerboard[0], 0:checkerboard[1]].T.reshape(-1, 2)
+# termination criteria
+criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-    # Lists to store coordinates from both world and image planes
-    world_coordinates = []
-    image_coordinates = []
 
-    images = glob.glob('images/*.jpg')
-    logging.info('Finding chessboard corners...')
+def find_corners(square_size=0.025, width=9, height=6):
+    """ Apply camera calibration operation for images in the given directory path. """
+    # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(8,6,0)
+    util.info("Finding checkerboard corners...")
+    objp = np.zeros((height*width, 3), np.float32)
+    objp[:, :2] = np.mgrid[0:width, 0:height].T.reshape(-1, 2)
+
+    objp = objp * square_size
+
+    # Arrays to store object points and image points from all the images.
+    objpoints = []  # 3d point in real world space
+    imgpoints = []  # 2d points in image plane.
+
+    images = glob.glob('images/IMG*.jpg')
     count = 1
     for fname in images:
+        util.info("Finding corners for " + fname)
         img = cv2.imread(fname)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find the chess board corners
-        ret, corners = cv2.findChessboardCorners(gray, checkerboard,
-                                                 cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
+        ret, corners = cv2.findChessboardCorners(gray, (width, height), None)
 
         # If found, add object points, image points (after refining them)
         if ret:
-            world_coordinates.append(object_points)
+            objpoints.append(objp)
 
-            corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), termination_criteria)
-            image_coordinates.append(corners2)
+            corners2 = cv2.cornerSubPix(
+                gray, corners, (11, 11), (-1, -1), criteria)
+            imgpoints.append(corners2)
 
             # Draw and display the corners
-            img = cv2.drawChessboardCorners(img, checkerboard, corners2, ret)
+            img = cv2.drawChessboardCorners(
+                img, (width, height), corners2, ret)
             cv2.imwrite('images/pattern_' + str(count) + '.png', img)
-            # cv2.imshow('img', img)
-            #3cv2.waitKey(500)
             count += 1
 
-    # cv2.destroyAllWindows()
-
-    return world_coordinates, image_coordinates
-
-
-def convert_to_2d(points):
-    logging.info('Converting image points to 2D...')
-    converted_list = []
-    for group in points:
-        for point in group:
-            converted_list.append(point[0].tolist())
-
-    return converted_list
+    util.info("DONE.")
+    return objpoints, imgpoints
 
 
-def convert_to_3d(points):
-    logging.info('Converting world points to 3D...')
-    converted_list = []
-    for group in points:
-        for point in group:
-            for p in point:
-                converted_list.append(p.tolist())
-
-    return converted_list
-
-
-def normalize_points_2d(points):
-    logging.info('Normalizing 2D points using similarity transformation...')
-    points = np.array(points)
-    mean, std = np.mean(points, 0), np.std(points)
-
-    # Create similarity transformation matrix
-    # Set centroid as origin
-    transformation = np.array([[std / np.sqrt(2), 0, mean[0]],
-                               [0, std / np.sqrt(2), mean[1]],
-                               [0, 0, 1]])
-
-    # Apply transformation on points
-    transformation = np.linalg.inv(transformation)
-    points = np.dot(transformation, np.concatenate((points.T, np.ones((1, points.shape[0])))))
-    points = points[0:2].T
-
-    return points, transformation
-
-
-def normalize_points_3d(points):
-    logging.info('Normalizing 3D points using similarity transformation...')
-    points = np.array(points)
-    mean, std = np.mean(points, 0), np.std(points)
-
-    # Create similarity transformation matrix
-    # Set centroid as origin
-    transformation = np.array([[std / np.sqrt(3), 0, 0, mean[0]],
-                               [0, std / np.sqrt(3), 0, mean[1]],
-                               [0, 0, std / np.sqrt(3), mean[2]],
-                               [0, 0, 0, 1]])
-
-    # Apply transformation on points
-    transformation = np.linalg.inv(transformation)
-    points = np.dot(transformation, np.concatenate((points.T, np.ones((1, points.shape[0])))))
-    points = points[0:3].T
-
-    return points, transformation
-
-
-def geometric_error(correspondence, h):
-    # Thus, geometric distance is related to, but not quite the same as, algebraic distance.
-    # Note, though, that if z coordinates equal 1, then the two distances are identical.
-    logging.info('Calculating geometric distance...')
-    point1 = np.transpose(np.matrix([correspondence[0].item(0), correspondence[0].item(1), 1]))
-    estimated_point2 = np.dot(h, point1)
-    estimated_point2 = (1 / estimated_point2.item(2)) * estimated_point2
-
-    point2 = np.transpose(np.matrix([correspondence[0].item(2), correspondence[0].item(3), 1]))
-    error = point2 - estimated_point2
-    distance = np.linalg.norm(error)
-    return distance / np.dot(point1.item(2), point2.item(2))
-
-
-def create_camera_matrix(image_points, world_points):
-    logging.info('Creating camera matrix...')
+def create_homography(image_points, world_points):
+    util.info("Creating homography matrix...")
     a_list = []
-    xyz = np.asarray(world_points)
-    ab = np.asarray(image_points)
-    # Normalize points with regarding dimensions and get similarity transformations
-    normalized_image_coors, t = normalize_points_2d(image_points)
-    normalized_world_coors, u = normalize_points_3d(world_points)
-    for i in range(len(normalized_image_coors)):
+    # Get similarity transformations
+    t = util.get_transformation_matrix(image_points, 0)
+    t_prime = util.get_transformation_matrix(world_points, 1)
+    for i in range(len(image_points)):
         # In Zhang's calibration method, the world coordinate system is placed on the checkerboard plane,
         # and the checkerboard plane is set to the plane with z = 0.
-        # But in this project, we will use exact points
         # First, convert each points into homogeneous coordinates
-        point1 = np.matrix([normalized_image_coors[i][0], normalized_image_coors[i][1], 1])
-        point2 = np.matrix([normalized_world_coors[i][0], normalized_world_coors[i][1], 0, 1])
-        a, b = point1.item(0), point1.item(1)
-        x, y, z = point2.item(0), point2.item(1), point2.item(2)
+        point1 = util.to_homogeneous(image_points[i], 0)
+        point2 = util.to_homogeneous(world_points[i], 1)
+        # Get normalized points with the matrix calculated before
+        normalized_point1 = np.dot(point1, t.T)
+        normalized_point2 = np.dot(point2, t_prime.T)
+        a, b = normalized_point1.item(0), normalized_point1.item(1)
+        x, y = normalized_point2.item(0), normalized_point2.item(1)
 
-        # Form the 2n x 12 matrix A by stacking the equations generated by each correspondence. Write 'p' for the vector
-        # containing the entries of the matrix P.
-        a_row1 = [x, y, z, 1, 0, 0, 0, 0, -a * x, -a * y, -a * z, -a]
-        a_row2 = [0, 0, 0, 0, x, y, z, 1, -b * x, -b * y, -b * z, -b]
+        # Form the 2n x 12 matrix A by stacking the equations generated by each correspondence.
+        a_row1 = [-a, -b, -1, 0, 0, 0, x * a, x * b, x]
+        a_row2 = [0, 0, 0, -a, -b, -1, y * a, y * b, y]
 
         # Assemble the 2n x 9 matrices Ai into a single matrix A.
         a_list.append(a_row1)
@@ -150,74 +80,178 @@ def create_camera_matrix(image_points, world_points):
 
     a_matrix = np.matrix(a_list)
 
-    # A solution of Ap = 0, subject to ||p|| = 1, is obtained from the unit singular vector of A corresponding to the
-    # smallest singular value.
-    U, S, V = np.linalg.svd(a_matrix)
+    # A solution of Ah = 0 is obtained from the right singular vector of V associated with the smallest singular value.
+    U, S, V_t = np.linalg.svd(a_matrix)
 
-    # The parameters are in the last line of Vh and normalize them
-    H = np.reshape(V[8], (3, 4))
-    H = (1 / H.item(8)) * H
+    # The parameters are in the min line of Vh
+    L = V_t[-1]
+    H = L.reshape(3, 3)
 
     # Denormalization
-    # pinv: Moore-Penrose pseudo-inverse of a matrix, generalized inverse of a matrix using its SVD
-    H = np.dot(np.dot(np.linalg.pinv(t), H), u)
-    #L = H / H[-1, -1]
-    # L = H.flatten()
+    H = np.dot(np.dot(np.linalg.inv(t_prime), H), t)
 
-    # Mean error of the DLT (mean residual of the DLT transformation in units of camera coordinates):
-    # uv2 = np.dot(H, np.concatenate((xyz.T, np.ones((1, xyz.shape[0])))))
-    # uv2 = uv2 / uv2[2, :]
-    # Mean distance:
-    # err = np.sqrt(np.mean(np.sum((uv2[0:2, :].T - ab)**2, 1)))
-
+    util.info("DONE.")
     return H
 
 
-def decompose_camera(P):
-    # Define H as the first three columns of P.
-    H = P[:, 0:3]
-    print("First three columns of P")
-    print(H)
-    print("---")
-    # K and R comes from an RQ decomposition.
-    k, r = linalg.rq(H)
-    print("K")
-    print(k)
-    print("---")
-    print("R")
-    print(r)
-    print("-----------")
-    H = P.T
-    h1 = H[0]
-    h2 = H[1]
-    h3 = H[2]
-    K_inv = np.linalg.inv(k)
-    L = 1 / np.linalg.norm(np.dot(h1, K_inv))
-    r1 = L * np.dot(h1, K_inv)
-    r2 = L * np.dot(h2, K_inv)
-    r3 = np.cross(r1, r2)
-    T = L * (K_inv @ h3.reshape(3, 1))
-    R = np.array([[r1], [r2], [r3]])
-    R = np.reshape(R, (3, 3))
-    print(T)
-    print("---")
-    print(R)
+def value_function(coordinates, *params):
+    h11, h12, h13, h21, h22, h23, h31, h32, h33 = params
 
+    N = coordinates.shape[0] // 2
+
+    X = coordinates[:N]
+    Y = coordinates[N:]
+
+    x = (h11 * X + h12 * Y + h13) / (h31 * X + h32 * Y + h33)
+    y = (h21 * X + h22 * Y + h23) / (h31 * X + h32 * Y + h33)
+
+    result = np.zeros_like(coordinates)
+    result[:N] = x
+    result[N:] = y
+
+    return result
+
+
+def jacobian_function(coordinates, *params):
+    # The  partial  derivatives  of  the  first  2  elements  of u and v  given  as  follows.
+    # These  values  are  used  for computing the Jacobian used for LM optimization
+    h11, h12, h13, h21, h22, h23, h31, h32, h33 = params
+
+    N = coordinates.shape[0] // 2
+
+    X = coordinates[:N]
+    Y = coordinates[N:]
+
+    J = np.zeros((N * 2, 9))
+    J_x = J[:N]
+    J_y = J[N:]
+
+    s_x = h11 * X + h12 * Y + h13
+    s_y = h21 * X + h22 * Y + h23
+    w   = h31 * X + h32 * Y + h33
+    w_sq = w ** 2
+
+    J_x[:, 0] = X / w
+    J_x[:, 1] = Y / w
+    J_x[:, 2] = 1. / w
+    J_x[:, 6] = (-s_x * X) / w_sq
+    J_x[:, 7] = (-s_x * Y) / w_sq
+    J_x[:, 8] = -s_x / w_sq
+
+    J_y[:, 3] = X / w
+    J_y[:, 4] = Y / w
+    J_y[:, 5] = 1. / w
+    J_y[:, 6] = (-s_y * X) / w_sq
+    J_y[:, 7] = (-s_y * Y) / w_sq
+    J_y[:, 8] = -s_y / w_sq
+
+    J[:N] = J_x
+    J[N:] = J_y
+
+    return J
+
+
+def refine_homography(homography, image_coordinates, world_coordinates):
+    util.info("Refining homography...")
+    X, Y, x, y = image_coordinates[:,0][:,0], image_coordinates[:,0][:,1], world_coordinates[:,0], world_coordinates[:,1]
+
+    N = X.shape[0]
+
+    h0 = homography.ravel()
+
+    x_points = np.zeros(N * 2)
+    x_points[:N] = X
+    x_points[N:] = Y
+
+    y_points = np.zeros(N * 2)
+    y_points[:N] = x
+    y_points[N:] = y
+
+    # Use Levenberg-Marquardt to refine the linear homography estimate
+    popt, pcov = curve_fit(value_function, x_points, y_points, p0=h0, jac=jacobian_function)
+    h_refined = popt
+
+    # Normalize and reconstitute homography
+    h_refined /= h_refined[-1]
+    H_refined = h_refined.reshape((3,3))
+
+    util.info("DONE.")
+    return H_refined
+
+def get_correspondences(img_points, homography):
+    util.info("Calculating correspondences with homography...")
+    correspondences = []
+    for point in img_points:
+        homogeneous_point = util.to_homogeneous(point, 0)
+        correspondence = np.matmul(homography, homogeneous_point.T)
+        correspondences.append(util.to_inhomogeneous(correspondence))
+    
+    util.info("DONE.")
+    return correspondences
+
+def plot_differences(img_points, obj_points, homography):
+    util.info("Plotting difference of object points and projected points...")
+    correspondences = get_correspondences(img_points, homography)
+
+    x1 =  obj_points[:, 0].tolist()
+    y1 = obj_points[:, 1].tolist()
+
+    plt.plot(x1, y1, label = "Object Points")
+
+    x2 = util.column(correspondences, 0)
+    y2 = util.column(correspondences, 1)
+
+    plt.plot(x2, y2, label = "Projected Points")
+    plt.xlabel('X Axis')
+
+    plt.ylabel('Y Axis')
+
+    plt.title('Comparison of object points and projected points')
+
+    plt.legend()
+
+    util.info("Showing graph...")
+    plt.show()
+    util.info("DONE.")
+
+def objective(x, a, b, c):
+	return a * x + b * x**2 + c
+
+def fit_curve(img_points, homography):
+    util.info("Fitting correspondences to a parabolic equation...")
+    correspondences = get_correspondences(img_points, homography)
+    x = util.column(correspondences, 0)
+    y = util.column(correspondences, 1)
+
+    popt, _ = curve_fit(objective, x, y)
+
+    a, b, c = popt
+    print('y = %.5f * x + %.5f * x^2 + %.5f' % (a, b, c))
+
+    plt.scatter(x, y)
+
+    x_line = np.arange(min(x), max(x), 1)
+
+    y_line = objective(x_line, a, b, c)
+
+    plt.plot(x_line, y_line, '--', color='red')
+    plt.show()
 
 def main():
-    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
-    world_coordinates, image_coordinates = find_corners()
-    converted_image_coordinates = convert_to_2d(image_coordinates)
-    converted_world_coordinates = convert_to_3d(world_coordinates)
-    L = create_camera_matrix(converted_image_coordinates, converted_world_coordinates)
-    print("Homography")
-    print(L)
-    print("---")
-    xyz = np.asarray(converted_world_coordinates)
-    ab = np.asarray(converted_image_coordinates)
-    # h_cv = cv2.findHomography(xyz, ab)
-    decompose_camera(L)
+    obj_points, img_points = find_corners()
+
+    refined_homographies = []
+    for index in range(len(img_points)):
+        util.info("Image Count: " + str(index + 1))
+        h = create_homography(img_points[index], obj_points[index])
+        util.info("Homography:\n" + str(h))
+        h = refine_homography(h, img_points[index], obj_points[index])
+        util.info("Refined Homography:\n" + str(h))
+        refined_homographies.append(h)
+        plot_differences(img_points[index], obj_points[index], h)
+        # fit_curve(img_points[index], h)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
     main()
