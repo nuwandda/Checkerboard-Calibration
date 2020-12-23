@@ -43,14 +43,24 @@ def get_transformation_matrix(points, points_type):
     var_y = y.var()
     # Create similarity transformation matrix
     # Set centroid as origin
-    std_x = np.sqrt(2 / var_x)
-    std_y = np.sqrt(2 / var_y)
-    transformation = np.array([[std_x, 0, -std_x * mean_x],
-                               [0, std_y, -std_y * mean_y],
-                               [0, 0, 1]])
+    std_x = np.sqrt(2. / var_x)
+    std_y = np.sqrt(2. / var_y)
+    transformation = np.array([[std_x, 0., -std_x * mean_x],
+                               [0., std_y, -std_y * mean_y],
+                               [0., 0., 1.]])
 
     return transformation
 
+def get_correspondences(img_points, homography):
+    info("Calculating correspondences with homography...")
+    correspondences = []
+    for point in img_points:
+        homogeneous_point = to_homogeneous(point, 0)
+        correspondence = np.matmul(homography, homogeneous_point.T)
+        correspondences.append(to_inhomogeneous(correspondence))
+
+    info("DONE.")
+    return correspondences
 
 def get_normalization_matrix_3d(points):
     logging.info('Normalizing 3D points using similarity transformation...')
@@ -81,3 +91,6 @@ def geometric_error(correspondence, h):
 
 def column(matrix, i):
     return [row[i] for row in matrix]
+
+def row(matrix, i):
+    pass
