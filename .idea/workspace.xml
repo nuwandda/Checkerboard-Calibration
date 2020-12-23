@@ -14,13 +14,14 @@
     <session id="330407601">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="7" />
+          <entry key="project.closed" value="8" />
           <entry key="project.open.time.0" value="1" />
           <entry key="project.open.time.4" value="1" />
           <entry key="project.open.time.5" value="2" />
           <entry key="project.open.time.6" value="2" />
+          <entry key="project.open.time.7" value="1" />
           <entry key="project.open.time.8" value="1" />
-          <entry key="project.opened" value="7" />
+          <entry key="project.opened" value="8" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.extensions.open">
@@ -60,8 +61,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/checkerboard_calibration.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="112">
-              <caret line="210" column="36" lean-forward="true" selection-start-line="209" selection-start-column="24" selection-end-line="210" selection-end-column="36" />
+            <state relative-caret-position="406">
+              <caret line="224" column="21" lean-forward="true" selection-start-line="224" selection-start-column="21" selection-end-line="224" selection-end-column="21" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
                 <marker date="1606472966588" expanded="true" signature="286:287" ph="..." />
@@ -103,9 +104,10 @@
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="6">
+  <component name="ProjectFrameBounds">
+    <option name="y" value="23" />
     <option name="width" value="1440" />
-    <option name="height" value="900" />
+    <option name="height" value="845" />
   </component>
   <component name="ProjectView">
     <navigator proportions="" version="1">
@@ -338,8 +340,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/checkerboard_calibration.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="112">
-          <caret line="210" column="36" lean-forward="true" selection-start-line="209" selection-start-column="24" selection-end-line="210" selection-end-column="36" />
+        <state relative-caret-position="406">
+          <caret line="224" column="21" lean-forward="true" selection-start-line="224" selection-start-column="21" selection-end-line="224" selection-end-column="21" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
             <marker date="1606472966588" expanded="true" signature="286:287" ph="..." />
