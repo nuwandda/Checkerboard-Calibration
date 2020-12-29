@@ -21,6 +21,12 @@ def to_homogeneous(points, points_type):
     else:
         return np.matrix([points[0], points[1], 1])
 
+def to_homogeneous_3d(points, points_type):
+    if points_type == 0:
+        return np.matrix([points[0][0], points[0][1], 0, 1])
+    else:
+        return np.matrix([points[0], points[1], 0, 1])
+
 def to_inhomogeneous(points):
     new_x = points[0] / points[2]
     new_y = points[1] / points[2]
@@ -28,6 +34,33 @@ def to_inhomogeneous(points):
     new_y = new_y.tolist()
 
     return [new_x[0][0], new_y[0][0]]
+
+def to_homogeneous_multiple_points(A):
+    A = np.atleast_2d(A)
+
+    N = A.shape[0]
+    A_hom = np.hstack((A, np.ones((N,1))))
+
+    return A_hom
+
+def to_inhomogeneous_multiple_points(A):
+    A = np.atleast_2d(A)
+
+    N = A.shape[0]
+    A /= A[:,-1][:, np.newaxis]
+    A_inhom = A[:,:-1]
+
+    return A_inhom
+
+def to_homogeneous_3d_multiple_points(A):
+    if A.ndim != 2 or A.shape[-1] != 2:
+        raise ValueError('Stacked vectors must be 2D inhomogeneous')
+
+    N = A.shape[0]
+    A_3d = np.hstack((A, np.zeros((N,1))))
+    A_3d_hom = to_homogeneous_multiple_points(A_3d)
+
+    return A_3d_hom
 
 def get_transformation_matrix(points, points_type):
     if points_type == 0:
@@ -94,3 +127,41 @@ def column(matrix, i):
 
 def row(matrix, i):
     pass
+
+def reorthogonalize(R):
+    U, S, V_t = np.linalg.svd(R)
+    new_R = np.dot(U, V_t)
+    
+    return new_R
+
+def distort(k, normalized_proj):
+    x, y = normalized_proj[:, 0], normalized_proj[:, 1]
+
+    # Calculate radii
+    r = np.sqrt(x**2 + y**2)
+
+    k0, k1 = k
+
+    # Calculate distortion effects
+    D = k0 * r**2 + k1 * r**4
+    
+    # Calculate distorted normalized projection values
+    x_prime = x * (1. + D)
+    y_prime = y * (1. + D)
+
+    distorted_proj = np.hstack((x_prime[:, np.newaxis], y_prime[:, np.newaxis]))
+
+    return distorted_proj
+
+def project(K, k, E, model):
+    model_hom = to_homogeneous_3d_multiple_points(model)
+
+    normalized_proj = np.dot(model_hom, E.T)
+    normalized_proj = to_inhomogeneous_multiple_points(normalized_proj)
+
+    distorted_proj = distort(k, normalized_proj)
+    distorted_proj_hom = to_homogeneous_multiple_points(distorted_proj)
+
+    sensor_proj = np.dot(distorted_proj_hom, K[:-1].T)
+
+    return sensor_proj
