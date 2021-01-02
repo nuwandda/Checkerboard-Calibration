@@ -39,10 +39,11 @@ def compute_intrinsics(homographies):
     # The solution to the equation above is well known as the eigenvector of vTv associated with the smallest eigenvalue
     # (equivalently, the right singular vector of v associated with the smallest singular value).
     U, S, V_t = np.linalg.svd(v)
+    idx = np.argmin(S)
 
     # Once b is estimated, we can compute all camera instrinsic matrix A. You can check Appendix B (page 18) for the details.
     # Matrix B is estimated up to a scale factor.
-    b0, b1, b2, b3, b4, b5 = V_t[-1]
+    b0, b1, b2, b3, b4, b5 = V_t[idx]
 
     v0 = (b1 * b3 - b0 * b4) / (b0 * b2 - b1 * b1)
     lmbda = b5 - (b3 * b3 + v0 * (b1 * b3 - b0 * b4)) / b0

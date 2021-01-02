@@ -11,7 +11,7 @@ import pathlib
 
 
 def main():
-    pathlib.Path('graphs/').mkdir(parents=True, exist_ok=True) 
+    pathlib.Path('graphs/').mkdir(parents=True, exist_ok=True)
     obj_points, img_points = cd.find_corners()
 
     refined_homographies = []
