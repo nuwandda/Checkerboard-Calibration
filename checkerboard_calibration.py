@@ -4,6 +4,7 @@ import intrinsic_estimation as intr
 import extrinsic_estimation as extr
 import distortion_estimation as de
 import parameter_refinement as pr
+import visualize
 import analysis
 import logging
 import util
@@ -12,7 +13,7 @@ import pathlib
 
 def main():
     pathlib.Path('graphs/').mkdir(parents=True, exist_ok=True)
-    obj_points, img_points = cd.find_corners()
+    obj_points, img_points, img_shapes, img_names = cd.find_corners()
 
     refined_homographies = []
     for index in range(len(img_points)):
@@ -46,6 +47,17 @@ def main():
     print('\tPrincipal Point: [ {:.5f}  {:.5f} ]'.format(K_opt[0,2], K_opt[1,2]))
     print('\t           Skew: [ {:.7f} ]'.format(K_opt[0,1]))
     print('\t     Distortion: [ {:.6f}  {:.6f} ]'.format(k_opt[0], k_opt[1]))
+
+    util.info("Projection Matrices for WebGL:\n")
+    znear, zfar = .1, 1000.
+    for idx, e in enumerate(extrinsics_opt):
+        p = util.get_camera_matrix(K_opt, e)
+        util.info("P matrix for image " + str(idx + 1) + ":\n" + str(p))
+        decomposed_p = util.decompose(p)
+        webgl_p = util.to_opengl_projection(decomposed_p['intrinsic'], 0, 0, img_shapes[idx][0], img_shapes[idx][1], znear, zfar, direction="y down")
+        util.info("P matrix(WebGl) for image " + str(idx + 1) + ":\n" + str(webgl_p))
+
+    visualize.visualize_camera_frame(obj_points[0], extrinsics_opt[0], img_names[0])
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
