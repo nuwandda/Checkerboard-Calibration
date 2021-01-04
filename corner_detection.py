@@ -19,6 +19,8 @@ def find_corners(square_size=0.025, width=9, height=6):
     # Arrays to store object points and image points from all the images.
     objpoints = []  # 3d point in real world space
     imgpoints = []  # 2d points in image plane.
+    img_names = [] # Image sizes with names
+    img_shapes = [] # Image sizes with names
 
     images = glob.glob('images/IMG*.jpg')
     count = 1
@@ -26,6 +28,8 @@ def find_corners(square_size=0.025, width=9, height=6):
         util.info("Finding corners for " + fname)
         img = cv2.imread(fname)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img_shapes.append([img.shape[0], img.shape[1]])
+        img_names.append(fname)
 
         # Find the chess board corners
         ret, corners = cv2.findChessboardCorners(gray, (width, height), None)
@@ -45,4 +49,4 @@ def find_corners(square_size=0.025, width=9, height=6):
             count += 1
 
     util.info("DONE.\n")
-    return objpoints, imgpoints
+    return objpoints, imgpoints, img_shapes, img_names
